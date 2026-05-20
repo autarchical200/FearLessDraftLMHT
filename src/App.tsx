@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, DragEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Search, 
@@ -64,6 +64,19 @@ export default function App() {
   const [indexToDelete, setIndexToDelete] = useState<number | null>(null);
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Custom lanes assignment for restricted pool (drag & drop / click selection overrides)
+  const [customChampLanes, setCustomChampLanes] = useState<Record<string, 'TOP' | 'JNG' | 'MID' | 'ADC' | 'SUP'>>(() => {
+    try {
+      const stored = localStorage.getItem('fearless_custom_lanes');
+      return stored ? JSON.parse(stored) : {};
+    } catch {
+      return {};
+    }
+  });
+  const [activeRestrictedMenu, setActiveRestrictedMenu] = useState<string | null>(null);
+  const [draggedChampId, setDraggedChampId] = useState<string | null>(null);
+  const [dragOverLane, setDragOverLane] = useState<'TOP' | 'JNG' | 'MID' | 'ADC' | 'SUP' | null>(null);
 
   // Initial loads: fetch champions & load backup if offline
   useEffect(() => {
@@ -179,13 +192,13 @@ export default function App() {
     allPicksFromPreviousGames.forEach(id => {
       const champ = champions.find(c => c.id === id);
       if (champ) {
-        const lane = getLaneForChampion(champ);
+        const lane = customChampLanes[champ.id] || getLaneForChampion(champ);
         grouped[lane].push(champ);
       }
     });
 
     return grouped;
-  }, [allPicksFromPreviousGames, champions]);
+  }, [allPicksFromPreviousGames, champions, customChampLanes]);
 
   const isPickedInCurrentGame = (champId: string) => {
     const current = games[currentGameIndex];
@@ -270,6 +283,43 @@ export default function App() {
     updateDraftState([{ gameNumber: 1, bluePicks: [], redPicks: [] }], 0, 'blue');
     setSearch('');
     setIsResetConfirmOpen(false);
+  };
+
+  // Drag and Drop handlers for custom lanes in Restricted Pool
+  const handleDragStart = (e: DragEvent, champId: string) => {
+    e.dataTransfer.setData('text/plain', champId);
+    setDraggedChampId(champId);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedChampId(null);
+    setDragOverLane(null);
+  };
+
+  const handleDragOverColumn = (e: DragEvent, laneKey: 'TOP' | 'JNG' | 'MID' | 'ADC' | 'SUP') => {
+    e.preventDefault();
+    if (dragOverLane !== laneKey) {
+      setDragOverLane(laneKey);
+    }
+  };
+
+  const handleDragLeaveColumn = () => {
+    setDragOverLane(null);
+  };
+
+  const handleDropColumn = (e: DragEvent, targetLane: 'TOP' | 'JNG' | 'MID' | 'ADC' | 'SUP') => {
+    e.preventDefault();
+    const champId = e.dataTransfer.getData('text/plain') || draggedChampId;
+    if (champId) {
+      const updated = {
+        ...customChampLanes,
+        [champId]: targetLane
+      };
+      setCustomChampLanes(updated);
+      localStorage.setItem('fearless_custom_lanes', JSON.stringify(updated));
+    }
+    setDraggedChampId(null);
+    setDragOverLane(null);
   };
 
   const handleImageUpload = (file: File) => {
@@ -493,7 +543,10 @@ export default function App() {
 
       <main className="max-w-7xl mx-auto p-6 flex flex-col gap-6">
         {/* Restricted Champions Top Panel */}
-        <section className="bg-gradient-to-b from-[#181115] to-[#0c0d12] border-2 border-red-500/50 rounded-2xl p-6 relative overflow-hidden shadow-[0_0_35px_rgba(239,68,68,0.2)]">
+        <section 
+          onClick={() => setActiveRestrictedMenu(null)}
+          className="bg-gradient-to-b from-[#181115] to-[#0c0d12] border-2 border-red-500/50 rounded-2xl p-6 relative overflow-hidden shadow-[0_0_35px_rgba(239,68,68,0.2)]"
+        >
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,_rgba(239,68,68,0.1),transparent_75%)] pointer-events-none" />
           <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-red-500/70 to-transparent" />
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 relative">
@@ -505,10 +558,10 @@ export default function App() {
                 </h3>
               </div>
               <p className="text-[10px] text-slate-400 uppercase tracking-widest font-mono font-black mt-1">
-                Các tướng đã sử dụng trong các ván trước • Không thể lựa chọn tiếp tục trong Loạt BO5 này
+                Các tướng đã sử dụng trong các ván trước • Không thể lựa chọn tiếp tục trong Loạt BO5 này (Kéo thả hoặc Click để di chuẩn lane)
               </p>
             </div>
-            <div className="bg-red-500/10 border border-red-500/40 px-5 py-2.5 rounded-xl text-center shadow-[0_0_20px_rgba(239,68,68,0.15)] shrink-0">
+            <div className="bg-red-500/10 border border-red-500/40 px-5 py-2.5 rounded-xl text-center shadow-[0_0_20px_rgba(239,68,68,0.15)] shrink-0 animate-pulse">
               <span className="text-[9px] text-red-400 font-mono font-black uppercase block tracking-widest leading-none mb-1.5">Đã Khóa Toàn Series</span>
               <span className="text-2xl font-mono font-black text-red-500 leading-none">{allPicksFromPreviousGames.size} CHAMPIONS</span>
             </div>
@@ -517,9 +570,20 @@ export default function App() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 relative">
             {LANES_LIST.map((lane) => {
               const champs = usedChampionsByLane[lane.key] || [];
+              const isHovered = dragOverLane === lane.key;
               return (
-                <div key={lane.key} className="bg-black/45 border border-white/5 rounded-xl p-4.5 flex flex-col gap-3.5 shadow-2xl relative">
-                  <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
+                <div 
+                  key={lane.key} 
+                  onDragOver={(e) => handleDragOverColumn(e, lane.key)}
+                  onDragLeave={handleDragLeaveColumn}
+                  onDrop={(e) => handleDropColumn(e, lane.key)}
+                  className={`bg-black/45 rounded-xl p-4.5 flex flex-col gap-3.5 shadow-2xl relative transition-all duration-300 border ${
+                    isHovered 
+                      ? 'border-red-500 bg-red-500/[0.05] scale-[1.02] shadow-[0_0_25px_rgba(239,68,68,0.25)]' 
+                      : 'border-white/5'
+                  }`}
+                >
+                  <div className="flex items-center justify-between border-b border-white/10 pb-2.5 select-none">
                     <div className="flex items-center gap-2">
                       <span className="text-base filter drop-shadow-sm">{lane.icon}</span>
                       <div className="text-left">
@@ -533,27 +597,80 @@ export default function App() {
                   </div>
 
                   <div className="flex flex-wrap gap-2.5 content-start min-h-[75px]">
-                    {champs.map((champ) => (
-                      <div 
-                        key={champ.id} 
-                        className="group relative transition-all duration-300 hover:scale-110 z-10"
-                        title={`${champ.name} (${lane.nameVi})`}
-                      >
-                        <div className="w-16 h-16 rounded-xl overflow-hidden border-2 border-red-600/70 shadow-[0_4px_12px_rgba(239,68,68,0.25)] bg-slate-950 transition-all duration-350 hover:border-red-500">
-                          <img 
-                            src={getChampionImageUrl(champ.id)} 
-                            alt={champ.name} 
-                            className="w-full h-full object-cover" 
-                          />
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
+                    {champs.map((champ) => {
+                      const isDragged = draggedChampId === champ.id;
+                      const isMenuOpen = activeRestrictedMenu === champ.id;
+                      return (
+                        <div 
+                          key={champ.id} 
+                          className={`group relative transition-all duration-300 hover:scale-110 z-10 cursor-grab active:cursor-grabbing ${
+                            isDragged ? 'opacity-30 scale-95' : 'opacity-100'
+                          }`}
+                          draggable="true"
+                          onDragStart={(e) => handleDragStart(e, champ.id)}
+                          onDragEnd={handleDragEnd}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveRestrictedMenu(isMenuOpen ? null : champ.id);
+                          }}
+                          title={`${champ.name} (${lane.nameVi}) - Kéo hoặc click để đổi lane`}
+                        >
+                          <div className="w-16 h-16 rounded-xl overflow-hidden border-2 border-red-600/70 shadow-[0_4px_12px_rgba(239,68,68,0.25)] bg-slate-950 transition-all duration-350 hover:border-red-400 select-none">
+                            <img 
+                              src={getChampionImageUrl(champ.id)} 
+                              alt={champ.name} 
+                              className="w-full h-full object-cover pointer-events-none" 
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
+                          </div>
+                          <div className="text-center mt-1.5 w-16 overflow-hidden">
+                            <p className="text-[8px] font-black font-sans text-slate-300 truncate uppercase tracking-wide group-hover:text-red-400 transition-colors select-none">
+                              {champ.name}
+                            </p>
+                          </div>
+
+                          {/* Manual Lane Quick Switcher Popover for Touch/Mobile & Quick Click */}
+                          {isMenuOpen && (
+                            <div 
+                              className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-[#0d1117] border border-red-500/40 rounded-xl p-2.5 z-50 shadow-2xl flex flex-col gap-1.5 min-w-[130px]"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest text-center leading-none pb-1 border-b border-white/5">
+                                CHUYỂN LANE
+                              </p>
+                              <div className="grid grid-cols-5 gap-1.5">
+                                {LANES_LIST.map(l => {
+                                  const currentActive = (customChampLanes[champ.id] || getLaneForChampion(champ)) === l.key;
+                                  return (
+                                    <button
+                                      key={l.key}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        const updated = {
+                                          ...customChampLanes,
+                                          [champ.id]: l.key
+                                        };
+                                        setCustomChampLanes(updated);
+                                        localStorage.setItem('fearless_custom_lanes', JSON.stringify(updated));
+                                        setActiveRestrictedMenu(null);
+                                      }}
+                                      className={`w-6 h-6 rounded flex items-center justify-center hover:bg-white/10 text-xs transition-colors cursor-pointer ${
+                                        currentActive 
+                                          ? 'bg-red-500/20 border border-red-500' 
+                                          : 'bg-white/[0.02] border border-transparent'
+                                      }`}
+                                      title={l.nameVi}
+                                    >
+                                      {l.icon}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
                         </div>
-                        <div className="text-center mt-1.5 w-16 overflow-hidden">
-                          <p className="text-[8px] font-black font-sans text-slate-300 truncate uppercase tracking-wide group-hover:text-red-400 transition-colors">
-                            {champ.name}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                     {champs.length === 0 && (
                       <div className="flex-1 flex flex-col items-center justify-center border border-dashed border-white/5 rounded-xl py-6 bg-white/[0.01]">
                         <span className="text-[9px] text-[#4ea3b1] font-mono uppercase tracking-widest font-black">Sẵn Sàng</span>
