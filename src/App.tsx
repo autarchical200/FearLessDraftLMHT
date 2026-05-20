@@ -77,6 +77,7 @@ export default function App() {
   const [activeRestrictedMenu, setActiveRestrictedMenu] = useState<string | null>(null);
   const [draggedChampId, setDraggedChampId] = useState<string | null>(null);
   const [dragOverLane, setDragOverLane] = useState<'TOP' | 'JNG' | 'MID' | 'ADC' | 'SUP' | null>(null);
+  const [selectedLaneFilter, setSelectedLaneFilter] = useState<'ALL' | 'TOP' | 'JNG' | 'MID' | 'ADC' | 'SUP'>('ALL');
 
   // Initial loads: fetch champions & load backup if offline
   useEffect(() => {
@@ -175,10 +176,34 @@ export default function App() {
   }, [games, currentGameIndex]);
 
   const filteredChampions = useMemo(() => {
-    return champions.filter(champ => 
-      champ.name.toLowerCase().includes(search.toLowerCase())
-    );
-  }, [champions, search]);
+    return champions.filter(champ => {
+      const matchesSearch = champ.name.toLowerCase().includes(search.toLowerCase());
+      if (!matchesSearch) return false;
+      if (selectedLaneFilter === 'ALL') return true;
+      const lane = getLaneForChampion(champ);
+      return lane === selectedLaneFilter;
+    });
+  }, [champions, search, selectedLaneFilter]);
+
+  const laneStats = useMemo(() => {
+    const stats: Record<'TOP' | 'JNG' | 'MID' | 'ADC' | 'SUP', { total: number; used: number }> = {
+      TOP: { total: 0, used: 0 },
+      JNG: { total: 0, used: 0 },
+      MID: { total: 0, used: 0 },
+      ADC: { total: 0, used: 0 },
+      SUP: { total: 0, used: 0 }
+    };
+
+    champions.forEach(champ => {
+      const lane = getLaneForChampion(champ);
+      stats[lane].total += 1;
+      if (allPicksFromPreviousGames.has(champ.id)) {
+        stats[lane].used += 1;
+      }
+    });
+
+    return stats;
+  }, [champions, allPicksFromPreviousGames]);
 
   const usedChampionsByLane = useMemo(() => {
     const grouped: Record<'TOP' | 'JNG' | 'MID' | 'ADC' | 'SUP', Champion[]> = {
@@ -906,6 +931,70 @@ export default function App() {
                 <div className={`w-2 h-2 rounded-full bg-red-500 ${activeTeam === 'red' && 'animate-pulse bg-red-300'}`} />
                 🔴 TEAM ĐỎ (RED)
               </button>
+            </div>
+          </div>
+
+          {/* Lane Quick Filters & Pool Health Analyzer */}
+          <div className="bg-gradient-to-r from-[#111317] to-[#0c0d12] border border-white/5 rounded-2xl p-5 flex flex-col gap-4 shadow-2xl relative overflow-hidden group">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+              <div>
+                <span className="text-[9px] text-[#4ea3b1] font-black uppercase tracking-widest block font-mono leading-none">BỘ LỌC THÔNG MINH</span>
+                <h4 className="text-xs font-black text-white uppercase tracking-wider mt-1.5 flex items-center gap-1.5">
+                  Lọc theo vị trí & Thống kê bể tướng
+                </h4>
+              </div>
+              <div className="text-[10px] text-slate-500 font-mono">
+                Xem nhanh số lượng tướng còn lại trong loạt trận BO5 Fearless
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+              <button
+                type="button"
+                onClick={() => setSelectedLaneFilter('ALL')}
+                className={`py-3 px-3 rounded-xl border font-black uppercase text-[10px] tracking-wider transition-all duration-300 flex flex-col items-center justify-center gap-1.5 cursor-pointer select-none ${
+                  selectedLaneFilter === 'ALL'
+                    ? 'bg-gradient-to-b from-cyan-500/20 to-cyan-500/5 border-cyan-400 text-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.15)] scale-[1.03]'
+                    : 'bg-black/30 border-white/5 text-slate-400 hover:border-white/15 hover:text-slate-200'
+                }`}
+              >
+                <div className="flex items-center gap-1.5 font-bold">
+                  <span>✨</span>
+                  <span>TẤT CẢ</span>
+                </div>
+                <span className="text-[8px] font-mono text-slate-500 font-black uppercase">
+                  {champions.length - allPicksFromPreviousGames.size} KHẢ DỤNG
+                </span>
+              </button>
+
+              {LANES_LIST.map((lane) => {
+                const stats = laneStats[lane.key];
+                const total = stats ? stats.total : 0;
+                const used = stats ? stats.used : 0;
+                const remaining = total - used;
+                const isActive = selectedLaneFilter === lane.key;
+
+                return (
+                  <button
+                    key={lane.key}
+                    type="button"
+                    onClick={() => setSelectedLaneFilter(lane.key)}
+                    className={`py-3 px-3 rounded-xl border font-black uppercase text-[10px] tracking-wider transition-all duration-300 flex flex-col items-center justify-center gap-1.5 cursor-pointer select-none ${
+                      isActive
+                        ? 'bg-gradient-to-b from-red-500/20 to-red-500/5 border-red-500 text-red-400 shadow-[0_0_15px_rgba(239,68,68,0.15)] scale-[1.03]'
+                        : 'bg-black/30 border-white/5 text-slate-400 hover:border-white/15 hover:text-slate-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 font-bold">
+                      <span className="text-xs">{lane.icon}</span>
+                      <span>{lane.nameVi}</span>
+                    </div>
+                    <span className={`text-[8px] font-mono font-black ${remaining <= 3 ? 'text-red-400 animate-pulse font-extrabold' : 'text-slate-500'}`}>
+                      {remaining} CÒN LẠI
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
