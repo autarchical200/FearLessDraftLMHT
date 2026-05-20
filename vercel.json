@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/api/detect-champions", "destination": "/api/detect-champions.ts" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
