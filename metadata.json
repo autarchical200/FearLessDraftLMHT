@@ -1,0 +1,6 @@
+{
+  "name": "LoL Fearless Draft Tracker",
+  "description": "A tool to track champion picks and bans for League of Legends Fearless Draft series. Includes champion images and game-by-game history.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

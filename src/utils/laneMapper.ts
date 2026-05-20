@@ -1,0 +1,206 @@
+import { Champion } from '../types';
+
+// A mapping of most champion IDs to their primary professional lane/role.
+export const CHAMPION_LANES: Record<string, 'TOP' | 'JNG' | 'MID' | 'ADC' | 'SUP'> = {
+  Aatrox: 'TOP',
+  Camille: 'TOP',
+  Darius: 'TOP',
+  DrMundo: 'TOP',
+  Fiora: 'TOP',
+  Gangplank: 'TOP',
+  Garen: 'TOP',
+  Gnar: 'TOP',
+  Gwen: 'TOP',
+  Illaoi: 'TOP',
+  Irelia: 'TOP',
+  Jax: 'TOP',
+  Jayce: 'TOP',
+  Kayle: 'TOP',
+  Kennen: 'TOP',
+  Kled: 'TOP',
+  Ksante: 'TOP',
+  Malphite: 'TOP',
+  Mordekaiser: 'TOP',
+  Nasus: 'TOP',
+  Olaf: 'TOP',
+  Ornn: 'TOP',
+  Quinn: 'TOP',
+  Renekton: 'TOP',
+  Riven: 'TOP',
+  Rumble: 'TOP',
+  Sett: 'TOP',
+  Shen: 'TOP',
+  Singed: 'TOP',
+  Sion: 'TOP',
+  Teemo: 'TOP',
+  Tryndamere: 'TOP',
+  Urgot: 'TOP',
+  Volibear: 'TOP',
+  Yorick: 'TOP',
+  Ambessa: 'TOP',
+
+  Amumu: 'JNG',
+  Belveth: 'JNG',
+  Briar: 'JNG',
+  Diana: 'JNG',
+  Ekko: 'JNG',
+  Elise: 'JNG',
+  Evelynn: 'JNG',
+  Fiddlesticks: 'JNG',
+  Gragas: 'JNG',
+  Graves: 'JNG',
+  Hecarim: 'JNG',
+  Ivern: 'JNG',
+  JarvanIV: 'JNG',
+  Karthus: 'JNG',
+  Kayn: 'JNG',
+  Khazix: 'JNG',
+  Kindred: 'JNG',
+  LeeSin: 'JNG',
+  Lillia: 'JNG',
+  MasterYi: 'JNG',
+  Nidalee: 'JNG',
+  Nocturne: 'JNG',
+  Nunu: 'JNG',
+  Rammus: 'JNG',
+  RekSai: 'JNG',
+  Rengar: 'JNG',
+  Sejuani: 'JNG',
+  Shaco: 'JNG',
+  Shyvana: 'JNG',
+  Skarner: 'JNG',
+  Taliyah: 'JNG',
+  Trundle: 'JNG',
+  Udyr: 'JNG',
+  Vi: 'JNG',
+  Viego: 'JNG',
+  Warwick: 'JNG',
+  Wukong: 'JNG',
+  XinZhao: 'JNG',
+  Zac: 'JNG',
+
+  Akali: 'MID',
+  Anivia: 'MID',
+  Annie: 'MID',
+  AurelionSol: 'MID',
+  Azir: 'MID',
+  Brand: 'MID',
+  Cassiopeia: 'MID',
+  Corki: 'MID',
+  Fizz: 'MID',
+  Galio: 'MID',
+  Heimerdinger: 'MID',
+  Hwei: 'MID',
+  Kassadin: 'MID',
+  Katarina: 'MID',
+  Leblanc: 'MID',
+  Lissandra: 'MID',
+  Lux: 'MID',
+  Malzahar: 'MID',
+  Naafiri: 'MID',
+  Neeko: 'MID',
+  Orianna: 'MID',
+  Pantheon: 'MID',
+  Qiyana: 'MID',
+  Ryze: 'MID',
+  Swain: 'MID',
+  Sylas: 'MID',
+  Syndra: 'MID',
+  Talon: 'MID',
+  TwistedFate: 'MID',
+  Veigar: 'MID',
+  Velkoz: 'MID',
+  Vex: 'MID',
+  Viktor: 'MID',
+  Vladimir: 'MID',
+  Yasuo: 'MID',
+  Yone: 'MID',
+  Zed: 'MID',
+  Zoe: 'MID',
+  Aurora: 'MID',
+  Mel: 'MID',
+
+  Aphelios: 'ADC',
+  Ashe: 'ADC',
+  Caitlyn: 'ADC',
+  Draven: 'ADC',
+  Ezreal: 'ADC',
+  Jhin: 'ADC',
+  Jinx: 'ADC',
+  Kaisa: 'ADC',
+  Kalista: 'ADC',
+  KogMaw: 'ADC',
+  Lucian: 'ADC',
+  MissFortune: 'ADC',
+  Nilah: 'ADC',
+  Samira: 'ADC',
+  Sivir: 'ADC',
+  Tristana: 'ADC',
+  Twitch: 'ADC',
+  Varus: 'ADC',
+  Vayne: 'ADC',
+  Xayah: 'ADC',
+  Zeri: 'ADC',
+  Smolder: 'ADC',
+
+  Alistar: 'SUP',
+  Bard: 'SUP',
+  Blitzcrank: 'SUP',
+  Braum: 'SUP',
+  Janna: 'SUP',
+  Karma: 'SUP',
+  Leona: 'SUP',
+  Lulu: 'SUP',
+  Milio: 'SUP',
+  Morgana: 'SUP',
+  Nami: 'SUP',
+  Nautilus: 'SUP',
+  Pyke: 'SUP',
+  Rakan: 'SUP',
+  Rell: 'SUP',
+  Renata: 'SUP',
+  Senna: 'SUP',
+  Seraphine: 'SUP',
+  Sona: 'SUP',
+  Soraka: 'SUP',
+  TahmKench: 'SUP',
+  Taric: 'SUP',
+  Thresh: 'SUP',
+  Yuumi: 'SUP',
+  Zilean: 'SUP',
+  Zyra: 'SUP'
+};
+
+export interface LaneDetails {
+  key: 'TOP' | 'JNG' | 'MID' | 'ADC' | 'SUP';
+  nameVi: string;
+  nameEn: string;
+  icon: string;
+  color: string;
+}
+
+export const LANES_LIST: LaneDetails[] = [
+  { key: 'TOP', nameVi: 'Đường Trên', nameEn: 'Top Lane', icon: '⚔️', color: 'border-amber-500/30 text-amber-400 bg-amber-500/10' },
+  { key: 'JNG', nameVi: 'Đi Rừng', nameEn: 'Jungle', icon: '🌀', color: 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10' },
+  { key: 'MID', nameVi: 'Đường Giữa', nameEn: 'Mid Lane', icon: '⚡', color: 'border-purple-500/30 text-purple-400 bg-purple-500/10' },
+  { key: 'ADC', nameVi: 'Xạ Thủ', nameEn: 'Dragon Lane', icon: '🏹', color: 'border-cyan-500/30 text-cyan-400 bg-cyan-400/10' },
+  { key: 'SUP', nameVi: 'Hỗ Trợ', nameEn: 'Support', icon: '🛡️', color: 'border-pink-500/30 text-pink-400 bg-pink-500/10' }
+];
+
+export function getLaneForChampion(champ: Champion): 'TOP' | 'JNG' | 'MID' | 'ADC' | 'SUP' {
+  if (CHAMPION_LANES[champ.id]) {
+    return CHAMPION_LANES[champ.id];
+  }
+
+  // Smart fallback based on Riot tags
+  const tags = champ.tags || [];
+  if (tags.includes('Marksman')) return 'ADC';
+  if (tags.includes('Support')) return 'SUP';
+  if (tags.includes('Tank') && tags.includes('Support')) return 'SUP';
+  if (tags.includes('Mage')) return 'MID';
+  if (tags.includes('Assassin')) return 'JNG';
+  if (tags.includes('Fighter')) return 'TOP';
+  if (tags.includes('Tank')) return 'TOP';
+
+  return 'MID'; // Default fallback
+}

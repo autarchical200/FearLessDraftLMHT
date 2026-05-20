@@ -1,0 +1,45 @@
+{
+  "entities": {
+    "Room": {
+      "title": "Room",
+      "description": "A collaborative room for Fearless Draft where multiple users can pick and ban in real-time.",
+      "type": "object",
+      "properties": {
+        "roomId": {
+          "type": "string",
+          "description": "Unique alphanumeric 6-digit room code."
+        },
+        "games": {
+          "type": "array",
+          "description": "List of draft games designed for Fearless Draft series."
+        },
+        "currentGameIndex": {
+          "type": "integer",
+          "description": "The currently active game index in the series."
+        },
+        "activeTeam": {
+          "type": "string",
+          "enum": ["blue", "red"],
+          "description": "The currently selecting team."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the draft room was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the draft room was last modified."
+        }
+      },
+      "required": ["roomId", "games", "currentGameIndex", "activeTeam", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/rooms/{roomId}": {
+      "schema": "Room",
+      "description": "All drafting data for a specific room index."
+    }
+  }
+}
