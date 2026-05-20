@@ -1,18 +1,26 @@
 import { GoogleGenAI, Type } from "@google/genai";
+import dotenv from "dotenv";
 
-// Initialize Gemini Client
+// Load local environment variables if available
+dotenv.config();
+
 let ai: GoogleGenAI | null = null;
-const apiKey = process.env.GEMINI_API_KEY;
 
-if (apiKey) {
-  ai = new GoogleGenAI({
-    apiKey: apiKey,
-    httpOptions: {
-      headers: {
-        'User-Agent': 'aistudio-build',
-      }
+function getGeminiClient() {
+  if (!ai) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (apiKey) {
+      ai = new GoogleGenAI({
+        apiKey: apiKey,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build',
+          }
+        }
+      });
     }
-  });
+  }
+  return ai;
 }
 
 export default async function handler(req: any, res: any) {
@@ -23,14 +31,17 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    if (!ai) {
+    const client = getGeminiClient();
+    if (!client) {
       return res.status(500).json({ 
         error: "Gemini API key is not configured on this server/deployment. " +
-               "Please ensure GEMINI_API_KEY is defined in Vercel/environment variables." 
+               "Please ensure GEMINI_API_KEY is defined in Vercel project environment settings, " +
+               "or check your local .env configuration." 
       });
     }
 
     const { image, championList } = req.body;
+
     if (!image) {
       return res.status(400).json({ error: "Missing image parameter (base64 or data URL/URI formats)." });
     }
@@ -58,7 +69,7 @@ export default async function handler(req: any, res: any) {
       "and detect all champions that are shown. Match each champion back to its legal ID in the provided champion list. " +
       "If you cannot determine the side (blue or red), default to 'unknown'. Output in clean JSON matching the requested schema.";
 
-    const response = await ai.models.generateContent({
+    const response = await client.models.generateContent({
       model: "gemini-3.5-flash",
       contents: [
         {
