@@ -21,7 +21,10 @@ import {
   Share2,
   LogOut,
   Globe,
-  RefreshCw
+  RefreshCw,
+  Camera,
+  UploadCloud,
+  AlertTriangle
 } from 'lucide-react';
 import { Champion, GameState, DraftMode } from './types.ts';
 import { fetchChampions, getChampionImageUrl } from './services/api.ts';
@@ -49,6 +52,18 @@ export default function App() {
 
   // Collaborative Room State - Default to "GLOBAL_DRAFT" for single continuous synchronization
   const roomId = "GLOBAL_DRAFT";
+
+  // AI Image Recognition States
+  const [isDetecting, setIsDetecting] = useState(false);
+  const [detectedChamps, setDetectedChamps] = useState<Array<{ id: string; name: string; team: string; checked: boolean }>>([]);
+  const [detectionError, setDetectionError] = useState<string | null>(null);
+  const [showDetectionModal, setShowDetectionModal] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
+
+  // Custom Confirmation Dialog States
+  const [indexToDelete, setIndexToDelete] = useState<number | null>(null);
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Initial loads: fetch champions & load backup if offline
   useEffect(() => {
@@ -174,7 +189,7 @@ export default function App() {
 
   const isPickedInCurrentGame = (champId: string) => {
     const current = games[currentGameIndex];
-    return current ? (current.bluePicks.includes(champId) || current.redPicks.includes(champId)) : false;
+    return current ? ((current.bluePicks?.includes(champId) || current.redPicks?.includes(champId)) || false) : false;
   };
 
   const isUnavailable = (champId: string) => {
@@ -185,9 +200,13 @@ export default function App() {
     if (isUnavailable(champId)) return;
 
     const newGames = [...games];
-    const current = { ...newGames[currentGameIndex] };
-    if (!current) return;
+    const rawCurrent = newGames[currentGameIndex];
+    if (!rawCurrent) return;
+    const current = { ...rawCurrent };
     
+    current.bluePicks = current.bluePicks || [];
+    current.redPicks = current.redPicks || [];
+
     const blueIndex = current.bluePicks.indexOf(champId);
     const redIndex = current.redPicks.indexOf(champId);
 
@@ -217,32 +236,186 @@ export default function App() {
 
   const deleteGame = (index: number) => {
     if (games.length <= 1) {
-      alert('Series phải có ít nhất 1 ván đấu!');
+      setErrorMessage('Series phải có ít nhất 1 ván đấu!');
       return;
     }
-    if (confirm(`Bạn có chắc muốn xóa Ván G${games[index].gameNumber} không? Các tướng đã chọn trong ván này sẽ được hoàn trả/mở khóa.`)) {
-      const updatedGames = games.filter((_, idx) => idx !== index);
-      const formattedGames = updatedGames.map((game, idx) => ({
-        ...game,
-        gameNumber: idx + 1
-      }));
-      
-      let newIndex = currentGameIndex;
-      if (currentGameIndex >= formattedGames.length) {
-        newIndex = formattedGames.length - 1;
-      } else if (currentGameIndex === index && currentGameIndex > 0) {
-        newIndex = currentGameIndex - 1;
-      }
-      
-      updateDraftState(formattedGames, newIndex, activeTeam);
+    setIndexToDelete(index);
+  };
+
+  const confirmDeleteGame = () => {
+    if (indexToDelete === null) return;
+    const index = indexToDelete;
+    const updatedGames = games.filter((_, idx) => idx !== index);
+    const formattedGames = updatedGames.map((game, idx) => ({
+      ...game,
+      gameNumber: idx + 1
+    }));
+    
+    let newIndex = currentGameIndex;
+    if (currentGameIndex >= formattedGames.length) {
+      newIndex = formattedGames.length - 1;
+    } else if (currentGameIndex === index && currentGameIndex > 0) {
+      newIndex = currentGameIndex - 1;
     }
+    
+    updateDraftState(formattedGames, newIndex, activeTeam);
+    setIndexToDelete(null);
   };
 
   const resetAll = () => {
-    if (confirm('Bạn có chắc chắn muốn reset toàn bộ series không? Toàn bộ tướng đã cấm/chọn sẽ được mở khóa lại.')) {
-      updateDraftState([{ gameNumber: 1, bluePicks: [], redPicks: [] }], 0, 'blue');
-      setSearch('');
+    setIsResetConfirmOpen(true);
+  };
+
+  const confirmResetAll = () => {
+    updateDraftState([{ gameNumber: 1, bluePicks: [], redPicks: [] }], 0, 'blue');
+    setSearch('');
+    setIsResetConfirmOpen(false);
+  };
+
+  const handleImageUpload = (file: File) => {
+    if (!file) return;
+    
+    if (!file.type.startsWith('image/')) {
+      setDetectionError('Vui lòng chọn một tệp hình ảnh (.png, .jpg, .jpeg, .webp, v.v.)!');
+      return;
     }
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const base64 = e.target?.result as string;
+      if (!base64) return;
+
+      setIsDetecting(true);
+      setDetectionError(null);
+      setDetectedChamps([]);
+      setShowDetectionModal(true);
+
+      try {
+        const resp = await fetch('/api/detect-champions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            image: base64,
+            championList: champions.map(c => ({ id: c.id, name: c.name })),
+          }),
+        });
+
+        if (!resp.ok) {
+          const errorData = await resp.json();
+          throw new Error(errorData.error || 'Server returned error during recognition.');
+        }
+
+        const rawResult = await resp.json();
+        const detected = rawResult.champions || [];
+
+        if (detected.length === 0) {
+          setDetectionError('Không nhận diện được vị tướng Liên Minh Huyền Thoại nào từ bức ảnh này. Vui lòng thử ảnh khác có độ phân giải cao hơn.');
+        } else {
+          const mapped = detected
+            .map((item: any) => {
+              const actualChamp = champions.find(c => c.id.toLowerCase() === item.id.toLowerCase() || c.name.toLowerCase() === item.name.toLowerCase());
+              if (actualChamp) {
+                return {
+                  id: actualChamp.id,
+                  name: actualChamp.name,
+                  team: item.team || 'unknown',
+                  checked: true,
+                };
+              }
+              return null;
+            })
+            .filter(Boolean) as Array<{ id: string; name: string; team: string; checked: boolean }>;
+
+          if (mapped.length === 0) {
+            setDetectionError('Có phát hiện tướng nhưng không trùng khớp với danh sách tướng hiện tại.');
+          } else {
+            setDetectedChamps(mapped);
+          }
+        }
+      } catch (err: any) {
+        console.error(err);
+        setDetectionError('Lỗi khi phân tích ảnh: ' + (err.message || 'Lỗi không xác định.'));
+      } finally {
+        setIsDetecting(false);
+      }
+    };
+
+    reader.onerror = () => {
+      setDetectionError('Không thể đọc được tệp tin này!');
+    };
+
+    reader.readAsDataURL(file);
+  };
+
+  const applyDetectedToNewGame = () => {
+    const selectedChampIds = detectedChamps.filter(c => c.checked).map(c => c.id);
+    if (selectedChampIds.length === 0) {
+      alert("Vui lòng chọn ít nhất một tướng để thêm.");
+      return;
+    }
+
+    const bluePicksToInsert: string[] = [];
+    const redPicksToInsert: string[] = [];
+
+    detectedChamps.filter(c => c.checked).forEach((champ) => {
+      if (champ.team === 'blue') {
+        if (bluePicksToInsert.length < 5) bluePicksToInsert.push(champ.id);
+      } else if (champ.team === 'red') {
+        if (redPicksToInsert.length < 5) redPicksToInsert.push(champ.id);
+      } else {
+        if (bluePicksToInsert.length < 5 && bluePicksToInsert.length <= redPicksToInsert.length) {
+          bluePicksToInsert.push(champ.id);
+        } else if (redPicksToInsert.length < 5) {
+          redPicksToInsert.push(champ.id);
+        } else if (bluePicksToInsert.length < 5) {
+          bluePicksToInsert.push(champ.id);
+        }
+      }
+    });
+
+    const newGames = [
+      ...games,
+      {
+        gameNumber: games.length + 1,
+        bluePicks: bluePicksToInsert,
+        redPicks: redPicksToInsert
+      }
+    ];
+
+    updateDraftState(newGames, games.length, activeTeam);
+    setShowDetectionModal(false);
+    setDetectedChamps([]);
+  };
+
+  const applyDetectedToCurrentGame = (team: 'blue' | 'red') => {
+    const selectedChampIds = detectedChamps.filter(c => c.checked).map(c => c.id);
+    if (selectedChampIds.length === 0) {
+      alert("Vui lòng chọn ít nhất một tướng.");
+      return;
+    }
+
+    const newGames = [...games];
+    const rawCurrent = newGames[currentGameIndex];
+    if (!rawCurrent) return;
+    const current = { ...rawCurrent };
+
+    current.bluePicks = current.bluePicks || [];
+    current.redPicks = current.redPicks || [];
+
+    if (team === 'blue') {
+      const merged = Array.from(new Set([...current.bluePicks, ...selectedChampIds])).slice(0, 5);
+      current.bluePicks = merged;
+    } else {
+      const merged = Array.from(new Set([...current.redPicks, ...selectedChampIds])).slice(0, 5);
+      current.redPicks = merged;
+    }
+
+    newGames[currentGameIndex] = current;
+    updateDraftState(newGames, currentGameIndex, activeTeam);
+    setShowDetectionModal(false);
+    setDetectedChamps([]);
   };
 
   if (loading) {
@@ -397,6 +570,45 @@ export default function App() {
         
         {/* Left Column: Draft Status */}
         <div className="lg:col-span-4 space-y-6">
+          {/* AI Champion Recognition Panel */}
+          <div className="bg-gradient-to-br from-[#121824] to-[#0d1117] border border-cyan-500/30 rounded-2xl p-5 relative overflow-hidden shadow-xl group">
+            <div className="absolute top-0 right-0 p-3 opacity-15 pointer-events-none">
+              <Camera className="w-16 h-16 text-cyan-400" />
+            </div>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
+              <h3 className="text-xs font-black text-slate-200 uppercase tracking-widest flex items-center gap-2">
+                NHẬN DIỆN BẰNG AI 📸
+              </h3>
+            </div>
+            
+            <p className="text-[10px] text-slate-400 leading-relaxed mb-4">
+              Chụp ảnh/Cắt màn hình (Screenshot) bảng cấm/chọn hoặc kết quả trận đấu rồi kéo thả hoặc nhấp vào đây để AI tự động cấm tướng cực nhanh!
+            </p>
+
+            <div
+              onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+              onDragLeave={() => setDragActive(false)}
+              onDrop={(e) => { e.preventDefault(); setDragActive(false); if (e.dataTransfer.files?.[0]) handleImageUpload(e.dataTransfer.files[0]); }}
+              onClick={() => { const fileInput = document.getElementById('ai-file-input'); fileInput?.click(); }}
+              className={`
+                border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-300
+                ${dragActive ? 'border-cyan-400 bg-cyan-500/10 scale-[1.02]' : 'border-white/10 hover:border-cyan-500/30 hover:bg-white/[0.01]'}
+              `}
+            >
+              <input
+                id="ai-file-input"
+                type="file"
+                accept="image/*"
+                onChange={(e) => { if (e.target.files?.[0]) handleImageUpload(e.target.files[0]); }}
+                className="hidden"
+              />
+              <UploadCloud className="w-8 h-8 text-cyan-400 mb-2 animate-bounce" />
+              <p className="text-xs font-black text-slate-200 uppercase tracking-wide">TẢI TRỰC TIẾP / THẢ ẢNH VÀO</p>
+              <p className="text-[9px] text-slate-500 font-mono mt-1">PNG, JPG, WEBP • MAX 15MB</p>
+            </div>
+          </div>
+
           {/* Game Selector */}
           <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-4 shadow-2xl relative overflow-hidden group">
             <div className="absolute inset-0 bg-gradient-to-br from-white/[0.02] to-transparent pointer-events-none" />
@@ -455,7 +667,7 @@ export default function App() {
               </h3>
               <div className="grid grid-cols-5 gap-2 relative">
                 {Array.from({ length: 5 }).map((_, i) => {
-                  const champId = games[currentGameIndex].bluePicks[i];
+                  const champId = games[currentGameIndex]?.bluePicks?.[i];
                   const champ = champId ? champions.find(c => c.id === champId) : null;
                   return (
                     <div key={i} className="aspect-square rounded-xl bg-black/40 border border-white/10 overflow-hidden flex items-center justify-center relative shadow-inner">
@@ -486,7 +698,7 @@ export default function App() {
               </h3>
               <div className="grid grid-cols-5 gap-2 relative">
                 {Array.from({ length: 5 }).map((_, i) => {
-                  const champId = games[currentGameIndex].redPicks[i];
+                  const champId = games[currentGameIndex]?.redPicks?.[i];
                   const champ = champId ? champions.find(c => c.id === champId) : null;
                   return (
                     <div key={i} className="aspect-square rounded-xl bg-black/40 border border-white/10 overflow-hidden flex items-center justify-center relative shadow-inner">
@@ -597,8 +809,8 @@ export default function App() {
             <AnimatePresence mode="popLayout">
               {filteredChampions.map((champ) => {
                 const unavailable = isUnavailable(champ.id);
-                const bluePicked = games[currentGameIndex].bluePicks.includes(champ.id);
-                const redPicked = games[currentGameIndex].redPicks.includes(champ.id);
+                const bluePicked = games[currentGameIndex]?.bluePicks?.includes(champ.id) || false;
+                const redPicked = games[currentGameIndex]?.redPicks?.includes(champ.id) || false;
                 
                 return (
                   <motion.div
@@ -704,6 +916,265 @@ export default function App() {
           </div>
         </div>
       </div>
+
+      {/* AI Detection Result Modal */}
+      <AnimatePresence>
+        {showDetectionModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="bg-[#0e121a] border border-cyan-500/30 rounded-2xl w-full max-w-lg p-6 relative overflow-hidden shadow-2xl"
+            >
+              <div className="absolute top-0 left-0 w-full h-[3px] bg-gradient-to-r from-cyan-500 via-blue-500 to-cyan-500" />
+              
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+                    <CheckCircle2 className="w-5 h-5 text-cyan-400" />
+                    KẾT QUẢ AI PHÂN TÍCH TƯỚNG
+                  </h3>
+                  <p className="text-[9px] text-slate-500 uppercase tracking-widest font-mono font-black mt-1">
+                    Nhận diện qua Gemini-3.5-Flash
+                  </p>
+                </div>
+                <button
+                  onClick={() => { setShowDetectionModal(false); setDetectedChamps([]); }}
+                  className="p-1 hover:bg-white/5 rounded-lg text-slate-400 hover:text-white transition-colors"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
+              </div>
+
+              {isDetecting ? (
+                <div className="py-12 flex flex-col items-center justify-center gap-4">
+                  <div className="w-12 h-12 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin shadow-[0_0_15px_rgba(6,182,212,0.3)]" />
+                  <div className="text-center font-black uppercase text-xs tracking-widest text-[#4ea3b1] animate-pulse">
+                    Đang quét & tính toán ảnh...
+                  </div>
+                  <p className="text-[9px] text-slate-500 font-mono">
+                    Gemini AI đang tìm kiếm biểu tượng tướng trong LoL
+                  </p>
+                </div>
+              ) : detectionError ? (
+                <div className="py-6 space-y-4">
+                  <div className="bg-red-950/20 border border-red-500/30 text-red-400 rounded-xl p-4 text-xs font-semibold leading-relaxed">
+                    ⚠️ {detectionError}
+                  </div>
+                  <button
+                    onClick={() => { setShowDetectionModal(false); setDetectedChamps([]); }}
+                    className="w-full py-2.5 bg-slate-100 hover:bg-white text-black font-black text-xs uppercase tracking-widest rounded-xl transition-all"
+                  >
+                    Đóng cửa sổ
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  <p className="text-[10px] text-slate-400 leading-relaxed font-semibold">
+                    Đã tìm thấy <span className="text-cyan-400 font-bold">{detectedChamps.length} tướng</span>. Hãy tích chọn những tướng bạn muốn cấm/khóa:
+                  </p>
+
+                  {/* Champions Grid Selection */}
+                  <div className="grid grid-cols-4 gap-3 max-h-[180px] overflow-y-auto p-1.5 scrollbar-thin bg-black/45 border border-white/5 rounded-xl">
+                    {detectedChamps.map((item, idx) => {
+                      const champImg = getChampionImageUrl(item.id);
+                      return (
+                        <div
+                          key={item.id + idx}
+                          onClick={() => {
+                            const updated = [...detectedChamps];
+                            updated[idx].checked = !updated[idx].checked;
+                            setDetectedChamps(updated);
+                          }}
+                          className={`
+                            relative rounded-xl border p-2 flex flex-col items-center cursor-pointer select-none transition-all duration-200
+                            ${item.checked 
+                              ? 'border-cyan-500 bg-cyan-950/15 shadow-[0_0_10px_rgba(6,182,212,0.1)]' 
+                              : 'border-white/5 hover:border-white/10 bg-slate-900/10 opacity-60'}
+                          `}
+                        >
+                          <div className="w-12 h-12 rounded-lg overflow-hidden border border-white/10 mb-1 relative">
+                            <img src={champImg} className="w-full h-full object-cover" />
+                            {item.checked && (
+                              <div className="absolute top-0.5 right-0.5 w-3.5 h-3.5 bg-cyan-500 rounded-full flex items-center justify-center">
+                                <span className="w-1.5 h-1.5 bg-black rounded-full" />
+                              </div>
+                            )}
+                          </div>
+                          <span className="text-[9px] font-black tracking-wide text-center text-slate-300 truncate w-full uppercase">
+                            {item.name}
+                          </span>
+                          <span className={`text-[7px] font-mono px-1 py-[1px] rounded mt-0.5 uppercase tracking-widest font-black ${
+                            item.team === 'blue' ? 'bg-blue-500/20 text-blue-400' :
+                            item.team === 'red' ? 'bg-red-500/20 text-red-400' : 'bg-slate-750/20 text-slate-400'
+                          }`}>
+                            {item.team === 'unknown' ? 'LoL Champ' : `${item.team} Side`}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Actions Selector */}
+                  <div className="space-y-3 pt-2">
+                    <span className="text-[9px] text-slate-500 uppercase font-bold tracking-widest block font-mono">Chọn vị trí cấm/chọn:</span>
+                    
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => applyDetectedToCurrentGame('blue')}
+                        className="py-2.5 px-3 bg-blue-950/40 hover:bg-blue-900/40 border border-blue-500/30 text-blue-400 font-extrabold text-[10px] tracking-widest uppercase rounded-xl transition-all active:scale-95 cursor-pointer"
+                      >
+                        🔵 Thêm Ván Hiện Tại (Blue)
+                      </button>
+                      <button
+                        onClick={() => applyDetectedToCurrentGame('red')}
+                        className="py-2.5 px-3 bg-[#3f0f1d] hover:bg-[#4f1f2d] border border-red-500/30 text-red-400 font-extrabold text-[10px] tracking-widest uppercase rounded-xl transition-all active:scale-95 cursor-pointer"
+                      >
+                        🔴 Thêm Ván Hiện Tại (Red)
+                      </button>
+                    </div>
+
+                    <button
+                      onClick={applyDetectedToNewGame}
+                      className="w-full py-3 bg-cyan-500 hover:bg-cyan-400 text-black font-black text-xs uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-cyan-500/10 flex items-center justify-center gap-2 active:scale-95 cursor-pointer"
+                    >
+                      🧪 Khóa thẳng bể cấm (Tạo Ván Mới)
+                    </button>
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          </div>
+        )}
+
+        {/* Custom Game Deletion Modal */}
+        {indexToDelete !== null && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="bg-[#0e121a] border border-red-500/30 rounded-2xl w-full max-w-md p-6 relative overflow-hidden shadow-2xl"
+            >
+              <div className="absolute top-0 left-0 w-full h-[3px] bg-gradient-to-r from-red-500 via-pink-500 to-red-500" />
+              
+              <div className="flex items-start gap-3 mb-4">
+                <AlertTriangle className="w-8 h-8 text-red-500 shrink-0 animate-pulse" />
+                <div>
+                  <h3 className="text-sm font-black text-white uppercase tracking-wider">
+                    XÓA VÁN ĐẤU V{games[indexToDelete]?.gameNumber}?
+                  </h3>
+                  <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-widest font-mono">
+                    THAO TÁC NÀY KHÔNG THỂ KHÔI PHỤC
+                  </p>
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-300 leading-relaxed mb-6 font-medium">
+                Bạn có chắc chắn muốn xóa <span className="text-red-400 font-bold">Ván G{games[indexToDelete]?.gameNumber}</span> không? Các tướng đã chọn trong ván này sẽ được hoàn trả/mở khóa lại trong bể tướng.
+              </p>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setIndexToDelete(null)}
+                  className="flex-1 py-2.5 bg-white/[0.05] hover:bg-white/[0.1] text-slate-300 font-black text-xs uppercase tracking-widest rounded-xl transition-all cursor-pointer"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  onClick={confirmDeleteGame}
+                  className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 text-white font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-red-600/20 cursor-pointer"
+                >
+                  Đồng ý xóa
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Custom Reset Series Modal */}
+        {isResetConfirmOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="bg-[#0e121a] border border-red-500/30 rounded-2xl w-full max-w-md p-6 relative overflow-hidden shadow-2xl"
+            >
+              <div className="absolute top-0 left-0 w-full h-[3px] bg-gradient-to-r from-red-500 via-amber-500 to-red-500" />
+              
+              <div className="flex items-start gap-3 mb-4">
+                <AlertTriangle className="w-8 h-8 text-red-500 shrink-0 animate-pulse" />
+                <div>
+                  <h3 className="text-sm font-black text-white uppercase tracking-wider">
+                    RESET TOÀN BỘ SERIES?
+                  </h3>
+                  <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-widest font-mono">
+                    LÀM MỚI BỂ TƯỚNG CẤM / CHỌN
+                  </p>
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-300 leading-relaxed mb-6 font-medium">
+                Bạn có chắc chắn muốn <span className="text-red-400 font-bold">reset toàn bộ series</span> không? Toàn bộ các ván đấu sẽ bị xóa và các tướng đã cấm/chọn sẽ được mở khóa lại từ đầu.
+              </p>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setIsResetConfirmOpen(false)}
+                  className="flex-1 py-2.5 bg-white/[0.05] hover:bg-white/[0.1] text-slate-300 font-black text-xs uppercase tracking-widest rounded-xl transition-all cursor-pointer"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  onClick={confirmResetAll}
+                  className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 text-white font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-red-600/20 cursor-pointer"
+                >
+                  Reset ngay
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Custom Info/Alert System Error Modal */}
+        {errorMessage !== null && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="bg-[#0e121a] border border-cyan-500/30 rounded-2xl w-full max-w-sm p-6 relative overflow-hidden shadow-2xl"
+            >
+              <div className="absolute top-0 left-0 w-full h-[3px] bg-gradient-to-r from-cyan-500 to-blue-500" />
+              
+              <div className="flex items-start gap-3 mb-4">
+                <Info className="w-8 h-8 text-cyan-400 shrink-0" />
+                <div>
+                  <h3 className="text-sm font-black text-white uppercase tracking-wider">
+                    THÔNG BÁO HỆ THỐNG
+                  </h3>
+                  <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-widest font-mono">
+                    Yêu cầu không hợp lệ
+                  </p>
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-300 leading-relaxed mb-6 font-medium">
+                {errorMessage}
+              </p>
+
+              <button
+                onClick={() => setErrorMessage(null)}
+                className="w-full py-2.5 bg-cyan-500 hover:bg-cyan-400 text-black font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-cyan-500/10 cursor-pointer"
+              >
+                Xác nhận
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
