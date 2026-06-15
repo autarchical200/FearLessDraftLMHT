@@ -234,7 +234,7 @@ export default function App() {
     return allPicksFromPreviousGames.has(champId);
   };
 
-  const togglePick = (champId: string, team: 'blue' | 'red') => {
+  const togglePick = (champId: string) => {
     if (isUnavailable(champId)) return;
 
     const newGames = [...games];
@@ -253,10 +253,13 @@ export default function App() {
     } else if (redIndex > -1) {
       current.redPicks = current.redPicks.filter(id => id !== champId);
     } else {
-      if (team === 'blue' && current.bluePicks.length < 5) {
-        current.bluePicks = [...current.bluePicks, champId];
-      } else if (team === 'red' && current.redPicks.length < 5) {
-        current.redPicks = [...current.redPicks, champId];
+      const totalCount = current.bluePicks.length + current.redPicks.length;
+      if (totalCount < 10) {
+        if (current.bluePicks.length < 5) {
+          current.bluePicks = [...current.bluePicks, champId];
+        } else {
+          current.redPicks = [...current.redPicks, champId];
+        }
       }
     }
 
@@ -434,19 +437,11 @@ export default function App() {
     const bluePicksToInsert: string[] = [];
     const redPicksToInsert: string[] = [];
 
-    detectedChamps.filter(c => c.checked).forEach((champ) => {
-      if (champ.team === 'blue') {
-        if (bluePicksToInsert.length < 5) bluePicksToInsert.push(champ.id);
-      } else if (champ.team === 'red') {
-        if (redPicksToInsert.length < 5) redPicksToInsert.push(champ.id);
-      } else {
-        if (bluePicksToInsert.length < 5 && bluePicksToInsert.length <= redPicksToInsert.length) {
-          bluePicksToInsert.push(champ.id);
-        } else if (redPicksToInsert.length < 5) {
-          redPicksToInsert.push(champ.id);
-        } else if (bluePicksToInsert.length < 5) {
-          bluePicksToInsert.push(champ.id);
-        }
+    selectedChampIds.forEach((id) => {
+      if (bluePicksToInsert.length < 5) {
+        bluePicksToInsert.push(id);
+      } else if (redPicksToInsert.length < 5) {
+        redPicksToInsert.push(id);
       }
     });
 
@@ -464,7 +459,7 @@ export default function App() {
     setDetectedChamps([]);
   };
 
-  const applyDetectedToCurrentGame = (team: 'blue' | 'red') => {
+  const applyDetectedToCurrentGame = () => {
     const selectedChampIds = detectedChamps.filter(c => c.checked).map(c => c.id);
     if (selectedChampIds.length === 0) {
       alert("Vui lòng chọn ít nhất một tướng.");
@@ -479,13 +474,20 @@ export default function App() {
     current.bluePicks = current.bluePicks || [];
     current.redPicks = current.redPicks || [];
 
-    if (team === 'blue') {
-      const merged = Array.from(new Set([...current.bluePicks, ...selectedChampIds])).slice(0, 5);
-      current.bluePicks = merged;
-    } else {
-      const merged = Array.from(new Set([...current.redPicks, ...selectedChampIds])).slice(0, 5);
-      current.redPicks = merged;
-    }
+    // Filter duplicates
+    const existing = new Set([...current.bluePicks, ...current.redPicks]);
+    const filteredToInsert = selectedChampIds.filter(id => !existing.has(id));
+
+    filteredToInsert.forEach((id) => {
+      const totalCount = current.bluePicks.length + current.redPicks.length;
+      if (totalCount < 10) {
+        if (current.bluePicks.length < 5) {
+          current.bluePicks.push(id);
+        } else {
+          current.redPicks.push(id);
+        }
+      }
+    });
 
     newGames[currentGameIndex] = current;
     updateDraftState(newGames, currentGameIndex, activeTeam);
@@ -533,19 +535,10 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-6">
-            <div className="hidden md:flex items-center gap-4 bg-white/5 border border-white/10 rounded-xl p-1 px-1.5">
-              <button
-                onClick={() => handleSelectActiveTeam('blue')}
-                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTeam === 'blue' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
-              >
-                Blue Pick
-              </button>
-              <button
-                onClick={() => handleSelectActiveTeam('red')}
-                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTeam === 'red' ? 'bg-red-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
-              >
-                Red Pick
-              </button>
+            <div className="hidden md:flex items-center gap-4 bg-cyan-950/20 border border-cyan-500/20 rounded-xl px-3 py-1.5">
+              <span className="text-[10px] font-black uppercase tracking-widest text-cyan-400 font-mono">
+                CẤM CHỌN BO5 FEARLESS
+              </span>
             </div>
 
             <div className="hidden md:flex flex-col items-end">
@@ -798,61 +791,50 @@ export default function App() {
 
           {/* Current Selection */}
           <div className="space-y-4">
-            {/* Blue Side */}
-            <div className="bg-blue-900/10 border border-blue-500/20 rounded-2xl p-5 overflow-hidden relative group">
+            {/* Unified 10 Played Champions Container */}
+            <div className="bg-cyan-950/10 border border-cyan-500/20 rounded-2xl p-5 overflow-hidden relative group">
               <div className="absolute top-0 right-0 p-8 opacity-5">
-                <Shield className="w-24 h-24 text-blue-500" />
+                <Users className="w-24 h-24 text-cyan-500" />
               </div>
-              <h3 className="text-blue-400 font-black text-[10px] uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
-                Blue Side Used
+              <h3 className="text-cyan-400 font-black text-[10px] uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse shadow-[0_0_8px_rgba(6,182,212,0.5)]" />
+                10 TƯỚNG ĐÃ CHƠI (VÁN {games[currentGameIndex]?.gameNumber})
               </h3>
               <div className="grid grid-cols-5 gap-2 relative">
-                {Array.from({ length: 5 }).map((_, i) => {
-                  const champId = games[currentGameIndex]?.bluePicks?.[i];
+                {Array.from({ length: 10 }).map((_, i) => {
+                  const combinedPicks = [
+                    ...(games[currentGameIndex]?.bluePicks || []),
+                    ...(games[currentGameIndex]?.redPicks || [])
+                  ];
+                  const champId = combinedPicks[i];
                   const champ = champId ? champions.find(c => c.id === champId) : null;
                   return (
-                    <div key={i} className="aspect-square rounded-xl bg-black/40 border border-white/10 overflow-hidden flex items-center justify-center relative shadow-inner">
+                    <div 
+                      key={i} 
+                      className="aspect-square rounded-xl bg-black/40 border border-white/10 overflow-hidden flex items-center justify-center relative shadow-inner cursor-pointer hover:border-cyan-500/50 transition-colors"
+                      onClick={() => {
+                        if (champ) {
+                          togglePick(champ.id);
+                        }
+                      }}
+                      title={champ ? `Click để bỏ chọn: ${champ.name}` : 'Slot trống'}
+                    >
                       {champ ? (
-                        <motion.img 
-                          initial={{ scale: 1.1, opacity: 0 }}
-                          animate={{ scale: 1, opacity: 1 }}
-                          src={getChampionImageUrl(champ.id)} 
-                          className="w-full h-full object-cover"
-                        />
+                        <div className="relative w-full h-full group/slot">
+                          <motion.img 
+                            initial={{ scale: 1.1, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            src={getChampionImageUrl(champ.id)} 
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/slot:opacity-100 flex items-center justify-center transition-opacity">
+                            <span className="text-[8px] font-black text-rose-500 tracking-wider">XÓA</span>
+                          </div>
+                        </div>
                       ) : (
-                        <div className="w-full h-full bg-slate-900/50" />
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Red Side */}
-            <div className="bg-red-900/10 border border-red-500/20 rounded-2xl p-5 overflow-hidden relative group">
-              <div className="absolute top-0 right-0 p-8 opacity-5">
-                <Shield className="w-24 h-24 text-red-500" />
-              </div>
-              <h3 className="text-red-400 font-black text-[10px] uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.5)]" />
-                Red Side Used
-              </h3>
-              <div className="grid grid-cols-5 gap-2 relative">
-                {Array.from({ length: 5 }).map((_, i) => {
-                  const champId = games[currentGameIndex]?.redPicks?.[i];
-                  const champ = champId ? champions.find(c => c.id === champId) : null;
-                  return (
-                    <div key={i} className="aspect-square rounded-xl bg-black/40 border border-white/10 overflow-hidden flex items-center justify-center relative shadow-inner">
-                      {champ ? (
-                        <motion.img 
-                          initial={{ scale: 1.1, opacity: 0 }}
-                          animate={{ scale: 1, opacity: 1 }}
-                          src={getChampionImageUrl(champ.id)} 
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full bg-slate-900/50" />
+                        <div className="w-full h-full bg-slate-900/50 flex items-center justify-center">
+                          <span className="text-[10px] text-slate-705 font-mono font-black">{i + 1}</span>
+                        </div>
                       )}
                     </div>
                   );
@@ -866,20 +848,24 @@ export default function App() {
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_0%_0%,_rgba(56,189,248,0.05),transparent_50%)]" />
             <h4 className="font-black text-slate-200 text-xs uppercase tracking-widest mb-3 flex items-center gap-2">
               <Info className="w-4 h-4 text-cyan-400" />
-              Series Info
+              Thông tin loạt trận
             </h4>
             <ul className="space-y-2 text-[10px] font-medium text-slate-400 leading-relaxed relative">
               <li className="flex items-start gap-2">
-                <span className="w-1 h-1 rounded-full bg-cyan-500 mt-1 shrink-0" />
-                Champions used in previous games are restricted.
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 mt-1 shrink-0" />
+                Các tướng bạn đã sử dụng ở ván trước sẽ tự động bị khóa (Restricted) trong các ván tiếp theo của loạt trận BO5 Fearless.
               </li>
               <li className="flex items-start gap-2">
-                <span className="w-1 h-1 rounded-full bg-cyan-500 mt-1 shrink-0" />
-                Click to pick for BLUE, Right-click to pick for RED.
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 mt-1 shrink-0" />
+                Click vào tướng trong danh sách bên phải để chọn tướng đã chơi cho ván hiện tại (mỗi ván tối đa 10 tướng).
               </li>
               <li className="flex items-start gap-2">
-                <span className="w-1 h-1 rounded-full bg-red-500 mt-1 shrink-0" />
-                Unavailable champions are marked with a strike.
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 mt-1 shrink-0" />
+                Click trực tiếp vào tướng trong ô "TƯỚNG ĐÃ CHƠI" hoặc click lại ở danh sách bên dưới để bỏ chọn tướng đó.
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500 mt-1 shrink-0" />
+                Kéo thả hoặc nhấn vào biểu tượng tướng trong bể khóa phía trên để đổi vị trí đường (TOP, JNG, MID, ADC, SUP) linh hoạt.
               </li>
             </ul>
           </div>
@@ -896,41 +882,6 @@ export default function App() {
               <span className="text-5xl font-black text-white/5 font-mono select-none">
                 {champions.length - allPicksFromPreviousGames.size} AVL
               </span>
-            </div>
-          </div>
-
-          {/* Active Picking Selector */}
-          <div className="bg-[#111317] border border-cyan-500/30 rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-4 shadow-lg shadow-cyan-500/5 relative overflow-hidden group">
-            <div className="absolute inset-0 bg-gradient-to-r from-blue-500/[0.03] to-red-500/[0.03] pointer-events-none" />
-            <div className="text-left relative z-10">
-              <span className="text-[9px] text-[#4ea3b1] font-black uppercase tracking-widest block font-mono leading-none">ĐANG THỰC HIỆN CẤM / CHỌN</span>
-              <h4 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5 mt-1.5">
-                Đội đang kích hoạt tướng
-              </h4>
-            </div>
-            <div className="flex items-center gap-3 w-full md:w-auto relative z-10">
-              <button
-                onClick={() => handleSelectActiveTeam('blue')}
-                className={`flex-1 md:flex-initial px-5 py-3 rounded-xl font-black uppercase text-xs tracking-widest transition-all duration-300 flex items-center justify-center gap-2 border ${
-                  activeTeam === 'blue' 
-                    ? 'bg-blue-600 text-white border-blue-400 shadow-[0_0_20px_rgba(59,130,246,0.4)] scale-105' 
-                    : 'bg-black/40 text-slate-500 border-white/10 hover:text-slate-300'
-                }`}
-              >
-                <div className={`w-2 h-2 rounded-full bg-blue-500 ${activeTeam === 'blue' && 'animate-pulse bg-blue-300'}`} />
-                🔵 TEAM XANH (BLUE)
-              </button>
-              <button
-                onClick={() => handleSelectActiveTeam('red')}
-                className={`flex-1 md:flex-initial px-5 py-3 rounded-xl font-black uppercase text-xs tracking-widest transition-all duration-300 flex items-center justify-center gap-2 border ${
-                  activeTeam === 'red' 
-                    ? 'bg-red-600 text-white border-red-400 shadow-[0_0_20px_rgba(239,68,68,0.4)] scale-105' 
-                    : 'bg-black/40 text-slate-500 border-white/10 hover:text-slate-300'
-                }`}
-              >
-                <div className={`w-2 h-2 rounded-full bg-red-500 ${activeTeam === 'red' && 'animate-pulse bg-red-300'}`} />
-                🔴 TEAM ĐỎ (RED)
-              </button>
             </div>
           </div>
 
@@ -1027,20 +978,15 @@ export default function App() {
                     <div 
                       className={`
                         aspect-square rounded-xl overflow-hidden border transition-all duration-300 relative
-                        ${bluePicked ? 'border-blue-500 scale-105 shadow-[0_0_20px_rgba(59,130,246,0.3)] z-10' : ''}
-                        ${redPicked ? 'border-red-500 scale-105 shadow-[0_0_20px_rgba(239,68,68,0.3)] z-10' : ''}
-                        ${!bluePicked && !redPicked ? 'border-white/10 hover:border-white/40' : ''}
+                        ${(bluePicked || redPicked) ? 'border-cyan-500 scale-105 shadow-[0_0_20px_rgba(6,182,212,0.35)] z-10' : ''}
+                        ${(!bluePicked && !redPicked) ? 'border-white/10 hover:border-white/40' : ''}
                         ${unavailable ? 'cursor-not-allowed grayscale contrast-125 border-red-500/20 bg-slate-900' : 'cursor-pointer'}
                       `}
                     >
                       <img 
                         src={getChampionImageUrl(champ.id)} 
                         alt={champ.name}
-                        onClick={() => !unavailable && togglePick(champ.id, activeTeam)}
-                        onContextMenu={(e) => {
-                          e.preventDefault();
-                          if (!unavailable) togglePick(champ.id, activeTeam === 'blue' ? 'red' : 'blue');
-                        }}
+                        onClick={() => !unavailable && togglePick(champ.id)}
                         className={`w-full h-full object-cover select-none transition-transform duration-500 ${!unavailable && 'group-hover:scale-110'}`}
                       />
 
@@ -1054,7 +1000,7 @@ export default function App() {
                       )}
 
                       {!unavailable && (bluePicked || redPicked) && (
-                        <div className={`absolute inset-0 border-2 pointer-events-none ${bluePicked ? 'border-blue-500' : 'border-red-500'}`} />
+                        <div className="absolute inset-0 border-2 pointer-events-none border-cyan-500" />
                       )}
 
                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
@@ -1083,42 +1029,25 @@ export default function App() {
       </main>
 
       {/* Mobile Footer helper */}
-      <div className="lg:hidden fixed bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-3rem)] max-w-sm bg-black/60 backdrop-blur-2xl border border-white/10 rounded-2xl p-4 flex flex-col gap-4 z-50 shadow-2xl">
-        <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl p-1">
-          <button
-            onClick={() => handleSelectActiveTeam('blue')}
-            className={`flex-1 py-2 px-3 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all duration-300 flex items-center justify-center gap-1.5 border ${
-              activeTeam === 'blue' 
-                ? 'bg-blue-600 text-white border-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.5)]' 
-                : 'bg-black/40 text-slate-500 border-white/5 hover:text-slate-300'
-            }`}
-          >
-            🔵 BLUE Pick
-          </button>
-          <button
-            onClick={() => handleSelectActiveTeam('red')}
-            className={`flex-1 py-1 px-3 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all duration-300 flex items-center justify-center gap-1.5 border ${
-              activeTeam === 'red' 
-                ? 'bg-red-600 text-white border-red-400 shadow-[0_0_15px_rgba(239,68,68,0.5)]' 
-                : 'bg-black/40 text-slate-500 border-white/5 hover:text-slate-300'
-            }`}
-          >
-            🔴 RED Pick
-          </button>
-        </div>
-        
+      <div className="lg:hidden fixed bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-3rem)] max-w-sm bg-black/80 backdrop-blur-2xl border border-white/10 rounded-2xl p-3 flex flex-col gap-2 z-50 shadow-2xl">
         <div className="flex justify-around items-center">
-          <div className="flex flex-col items-center gap-1">
-            <div className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]" />
-            <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Active Blue</span>
+          <div className="flex flex-col items-center gap-0.5">
+            <span className="text-cyan-400 text-xs font-black font-mono">
+              {[...(games[currentGameIndex]?.bluePicks || []), ...(games[currentGameIndex]?.redPicks || [])].length}/10
+            </span>
+            <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Đã Chọn v{games[currentGameIndex]?.gameNumber}</span>
           </div>
-          <div className="flex flex-col items-center gap-1">
-            <div className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]" />
-            <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Active Red</span>
+          <div className="flex flex-col items-center gap-0.5">
+            <span className="text-red-500 text-xs font-black font-mono">
+              {allPicksFromPreviousGames.size}
+            </span>
+            <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Đã Khóa</span>
           </div>
-          <div className="flex flex-col items-center gap-1">
-            <XCircle className="w-3.5 h-3.5 text-red-600" />
-            <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Used</span>
+          <div className="flex flex-col items-center gap-0.5">
+            <span className="text-emerald-400 text-xs font-black font-mono">
+              {champions.length - allPicksFromPreviousGames.size}
+            </span>
+            <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Khả Dụng</span>
           </div>
         </div>
       </div>
@@ -1224,22 +1153,14 @@ export default function App() {
 
                   {/* Actions Selector */}
                   <div className="space-y-3 pt-2">
-                    <span className="text-[9px] text-slate-500 uppercase font-bold tracking-widest block font-mono">Chọn vị trí cấm/chọn:</span>
+                    <span className="text-[9px] text-slate-500 uppercase font-bold tracking-widest block font-mono">Xác nhận cấm/chọn:</span>
                     
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        onClick={() => applyDetectedToCurrentGame('blue')}
-                        className="py-2.5 px-3 bg-blue-950/40 hover:bg-blue-900/40 border border-blue-500/30 text-blue-400 font-extrabold text-[10px] tracking-widest uppercase rounded-xl transition-all active:scale-95 cursor-pointer"
-                      >
-                        🔵 Thêm Ván Hiện Tại (Blue)
-                      </button>
-                      <button
-                        onClick={() => applyDetectedToCurrentGame('red')}
-                        className="py-2.5 px-3 bg-[#3f0f1d] hover:bg-[#4f1f2d] border border-red-500/30 text-red-400 font-extrabold text-[10px] tracking-widest uppercase rounded-xl transition-all active:scale-95 cursor-pointer"
-                      >
-                        🔴 Thêm Ván Hiện Tại (Red)
-                      </button>
-                    </div>
+                    <button
+                      onClick={applyDetectedToCurrentGame}
+                      className="w-full py-2.5 px-3 bg-cyan-950/40 hover:bg-cyan-900/40 border border-cyan-500/30 text-cyan-400 font-extrabold text-[10px] tracking-widest uppercase rounded-xl transition-all active:scale-95 cursor-pointer"
+                    >
+                      👉 Thêm Vào Ván Hiện Tại
+                    </button>
 
                     <button
                       onClick={applyDetectedToNewGame}
