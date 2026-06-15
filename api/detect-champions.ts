@@ -70,7 +70,7 @@ export default async function handler(req: any, res: any) {
       "If you cannot determine the side (blue or red), default to 'unknown'. Output in clean JSON matching the requested schema.";
 
     const response = await client.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-2.5-flash",
       contents: [
         {
           inlineData: {
