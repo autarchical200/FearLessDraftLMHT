@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo, DragEvent } from 'react';
+import React, { useState, useEffect, useMemo, DragEvent, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Search, 
@@ -427,6 +427,45 @@ export default function App() {
     reader.readAsDataURL(file);
   };
 
+  // Use a ref to always store the latest handleImageUpload function
+  const imageUploadRef = useRef(handleImageUpload);
+  useEffect(() => {
+    imageUploadRef.current = handleImageUpload;
+  }, [handleImageUpload]);
+
+  // Global clipboard paste handler
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      // Prevent capturing paste events if user is typing in input fields (like search or room ID)
+      const target = e.target as HTMLElement;
+      if (
+        target?.tagName === 'INPUT' || 
+        target?.tagName === 'TEXTAREA' || 
+        target?.isContentEditable
+      ) {
+        return;
+      }
+
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf('image') !== -1) {
+          const file = items[i].getAsFile();
+          if (file) {
+            imageUploadRef.current(file);
+            break;
+          }
+        }
+      }
+    };
+
+    window.addEventListener('paste', handlePaste);
+    return () => {
+      window.removeEventListener('paste', handlePaste);
+    };
+  }, []);
+
   const applyDetectedToNewGame = () => {
     const selectedChampIds = detectedChamps.filter(c => c.checked).map(c => c.id);
     if (selectedChampIds.length === 0) {
@@ -718,7 +757,7 @@ export default function App() {
             </div>
             
             <p className="text-[10px] text-slate-400 leading-relaxed mb-4">
-              Chụp ảnh/Cắt màn hình (Screenshot) bảng cấm/chọn hoặc kết quả trận đấu rồi kéo thả hoặc nhấp vào đây để AI tự động cấm tướng cực nhanh!
+              Chụp ảnh/Cắt màn hình (Screenshot) rồi <strong>nhấn Ctrl+V để dán trực tiếp</strong>, hoặc kéo thả ảnh vào vùng bên dưới để AI tự động nhận chọn tướng cực nhanh!
             </p>
 
             <div
@@ -739,8 +778,8 @@ export default function App() {
                 className="hidden"
               />
               <UploadCloud className="w-8 h-8 text-cyan-400 mb-2 animate-bounce" />
-              <p className="text-xs font-black text-slate-200 uppercase tracking-wide">TẢI TRỰC TIẾP / THẢ ẢNH VÀO</p>
-              <p className="text-[9px] text-slate-500 font-mono mt-1">PNG, JPG, WEBP • MAX 15MB</p>
+              <p className="text-xs font-black text-slate-200 uppercase tracking-wide">CLICK TẢI LÊN / THẢ / DÁN (CTRL+V)</p>
+              <p className="text-[9px] text-slate-500 font-mono mt-1">PNG, JPG, WEBP • HỖ TRỢ CLIPBOARD PASTE</p>
             </div>
           </div>
 
